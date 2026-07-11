@@ -1,0 +1,401 @@
+# OnIT India | Performer (Tasker) API Specification
+
+This document details the Performer (Tasker) API endpoints for mobile (Flutter) and admin portal developers. 
+
+It structures the profile management, KYC verification, banking, saved tasks, and discovery APIs used by Performers and Providers.
+
+---
+
+## 1. Create Performer Profile
+
+Used by users with `TASKER`, `PROVIDER`, or `PENDING` roles to initialize their tasker profile.
+
+*   **Method:** `POST`
+*   **Endpoint:** `/taskers`
+*   **Authentication:** `Required (Bearer Token)`
+*   **Role Permission:** `TASKER`, `PROVIDER`, `PENDING`
+*   **Behavior:** Validates phone number verification before creating the profile. A user can only have one tasker profile.
+
+### Request Body (Payload DTO)
+```json
+{
+  "displayName": "John Doe",
+  "phoneNumber": "+1234567890",
+  "kycDocUrl": "https://storage.provider.com/kyc-doc.pdf",
+  "serviceRadiusKm": 50,
+  "domain": "Home Services",
+  "skills": ["plumbing", "electrical"],
+  "profession": "Plumber",
+  "bio": "Expert plumber with 10 years of experience.",
+  "locationCity": "New York",
+  "languages": ["English", "Spanish"],
+  "experienceLevel": "expert" 
+}
+```
+
+### Successful Response (201 Created)
+```json
+{
+  "id": "tasker-uuid-123",
+  "userId": "user-uuid-123",
+  "displayName": "John Doe",
+  "isAvailable": true,
+  "createdAt": "2026-07-10T12:00:00.000Z",
+  "updatedAt": "2026-07-10T12:00:00.000Z"
+}
+```
+
+---
+
+## 2. Update Performer Profile
+
+Used by the mobile client to update the performer's profile fields.
+
+*   **Method:** `PUT`
+*   **Endpoint:** `/taskers/me`
+*   **Authentication:** `Required (Bearer Token)`
+*   **Role Permission:** `TASKER`
+
+### Request Body (Payload DTO)
+*(Allows partial updates)*
+```json
+{
+  "bio": "Updated bio with 11 years of experience.",
+  "serviceRadiusKm": 60
+}
+```
+
+### Successful Response (200 OK)
+```json
+{
+  "id": "tasker-uuid-123",
+  "bio": "Updated bio with 11 years of experience.",
+  "updatedAt": "2026-07-10T12:05:00.000Z"
+}
+```
+
+---
+
+## 3. Get Own Profile
+
+Used by the mobile client to load the tasker's own dashboard and profile details.
+
+*   **Method:** `GET`
+*   **Endpoint:** `/taskers/me`
+*   **Authentication:** `Required (Bearer Token)`
+*   **Role Permission:** `TASKER`
+*   **Behavior:** Fetches complete profile details including connected bank account, task assignments, and user rating.
+
+### Successful Response (200 OK)
+```json
+{
+  "id": "tasker-uuid-123",
+  "displayName": "John Doe",
+  "bio": "Expert plumber with 10 years of experience.",
+  "isAvailable": true,
+  "bankAccount": { ... },
+  "taskAssignments": [ ... ],
+  "user": {
+    "ratingAvg": 4.8,
+    "ratingCount": 24
+  }
+}
+```
+
+---
+
+## 4. Toggle Availability
+
+Used by the mobile client to quickly toggle whether the performer is currently available for direct assignments.
+
+*   **Method:** `PATCH`
+*   **Endpoint:** `/taskers/me/availability/toggle`
+*   **Authentication:** `Required (Bearer Token)`
+*   **Role Permission:** `TASKER`
+
+### Successful Response (200 OK)
+```json
+{
+  "id": "tasker-uuid-123",
+  "isAvailable": false,
+  "updatedAt": "2026-07-10T12:10:00.000Z"
+}
+```
+
+---
+
+## 5. Upsert Bank Account Details
+
+Used by the mobile client to save or update the tasker's payout bank account details.
+
+*   **Method:** `PUT`
+*   **Endpoint:** `/taskers/me/bank-account`
+*   **Authentication:** `Required (Bearer Token)`
+*   **Role Permission:** `TASKER`
+
+### Request Body (Payload DTO)
+```json
+{
+  "accountHolder": "John Doe",
+  "accountNumber": "123456789012",
+  "ifscCode": "HDFC0001234",
+  "bankName": "HDFC Bank"
+}
+```
+
+### Successful Response (200 OK)
+```json
+{
+  "id": "bank-uuid-123",
+  "taskerId": "tasker-uuid-123",
+  "accountNumber": "123456789012",
+  "bankName": "HDFC Bank",
+  "updatedAt": "2026-07-10T12:15:00.000Z"
+}
+```
+
+---
+
+## 6. Get Bank Account
+
+Used by the mobile client to retrieve current payout account details.
+
+*   **Method:** `GET`
+*   **Endpoint:** `/taskers/me/bank-account`
+*   **Authentication:** `Required (Bearer Token)`
+*   **Role Permission:** `TASKER`
+
+---
+
+## 7. Upload Government ID (KYC Step 1)
+
+Used by the mobile client to initiate the identity verification (KYC) flow.
+
+*   **Method:** `POST`
+*   **Endpoint:** `/taskers/me/kyc/id`
+*   **Authentication:** `Required (Bearer Token)`
+*   **Role Permission:** `TASKER`
+*   **Behavior:** Validates image format and size. Blocked if the tasker is already `VERIFIED`.
+
+### Request Body (Payload DTO)
+```json
+{
+  "docType": "AADHAAR", 
+  "idDocumentUrl": "https://storage.provider.com/id.jpg"
+}
+```
+
+### Successful Response (201 Created)
+```json
+{
+  "message": "Government ID uploaded successfully.",
+  "submissionId": "kyc-sub-uuid-123",
+  "nextStep": "SELFIE_WITH_ID"
+}
+```
+
+---
+
+## 8. Upload Selfie with ID (KYC Step 2)
+
+Used by the mobile client to complete the KYC verification flow.
+
+*   **Method:** `POST`
+*   **Endpoint:** `/taskers/me/kyc/selfie`
+*   **Authentication:** `Required (Bearer Token)`
+*   **Role Permission:** `TASKER`
+*   **Behavior:** Finalizes the submission, marks profile as `PENDING`, and triggers an admin review notification.
+
+### Request Body (Payload DTO)
+```json
+{
+  "submissionId": "kyc-sub-uuid-123",
+  "selfieUrl": "https://storage.provider.com/selfie.jpg"
+}
+```
+
+### Successful Response (201 Created)
+```json
+{
+  "message": "Selfie uploaded and KYC package submitted for admin review.",
+  "submission": {
+    "id": "kyc-sub-uuid-123",
+    "status": "PENDING",
+    "updatedAt": "2026-07-10T12:20:00.000Z"
+  }
+}
+```
+
+---
+
+## 9. Check KYC Status
+
+Used by the mobile client to show the current KYC verification status and what step the user should take next.
+
+*   **Method:** `GET`
+*   **Endpoint:** `/taskers/me/kyc`
+*   **Authentication:** `Required (Bearer Token)`
+*   **Role Permission:** `TASKER`
+
+### Successful Response (200 OK)
+```json
+{
+  "kycStatus": "PENDING",
+  "nextStep": "PENDING_REVIEW",
+  "currentSubmission": {
+    "id": "kyc-sub-uuid-123",
+    "status": "PENDING"
+  },
+  "rejectionReason": null,
+  "submissionHistory": [ ... ]
+}
+```
+
+---
+
+## 10. Save a Task
+
+Used by the mobile client to let taskers bookmark tasks for later.
+
+*   **Method:** `POST`
+*   **Endpoint:** `/taskers/me/saved-tasks/:taskId`
+*   **Authentication:** `Required (Bearer Token)`
+*   **Role Permission:** `TASKER`
+
+### Successful Response (201 Created)
+```json
+{
+  "id": "saved-task-uuid",
+  "taskerId": "tasker-uuid-123",
+  "taskId": "task-uuid-456",
+  "task": {
+    "title": "Fix Kitchen Sink",
+    "status": "PUBLISHED"
+  }
+}
+```
+
+---
+
+## 11. Unsave a Task
+
+Used by the mobile client to remove a bookmark.
+
+*   **Method:** `DELETE`
+*   **Endpoint:** `/taskers/me/saved-tasks/:taskId`
+*   **Authentication:** `Required (Bearer Token)`
+*   **Role Permission:** `TASKER`
+
+### Successful Response (200 OK)
+```json
+{
+  "message": "Task removed from saved"
+}
+```
+
+---
+
+## 12. Get Saved Tasks
+
+Used by the mobile client to display the tasker's bookmarks list.
+
+*   **Method:** `GET`
+*   **Endpoint:** `/taskers/me/saved-tasks`
+*   **Authentication:** `Required (Bearer Token)`
+*   **Role Permission:** `TASKER`
+*   **Query Parameters:** `page` (default: 1), `limit` (default: 20)
+
+---
+
+## 13. Track Recent Search
+
+Used by the mobile client to track what keywords the tasker is searching for, maintaining a history of up to 10 unique recent searches.
+
+*   **Method:** `POST`
+*   **Endpoint:** `/taskers/me/recent-search`
+*   **Authentication:** `Required (Bearer Token)`
+*   **Role Permission:** `TASKER`
+
+### Request Body (Payload DTO)
+```json
+{
+  "query": "plumbing jobs in New York"
+}
+```
+
+---
+
+## 14. Feed of Performers
+
+Used by the **Provider** client apps to browse through registered taskers in the system.
+
+*   **Method:** `GET`
+*   **Endpoint:** `/taskers`
+*   **Authentication:** `Required (Bearer Token)`
+*   **Role Permission:** `PROVIDER`
+*   **Query Parameters:** 
+    * `kycStatus` (e.g. `VERIFIED`)
+    * `minRating` (e.g. `4`)
+    * `isAvailable` (boolean)
+    * `profession` (string)
+    * `sortBy` (`rating_desc`, `rating_asc`, `tasks_completed_desc`, `newest`)
+    * `page` (number)
+    * `limit` (number)
+
+### Successful Response (200 OK)
+```json
+{
+  "taskers": [
+    {
+      "id": "tasker-uuid-123",
+      "displayName": "John Doe",
+      "profession": "Plumber",
+      "ratingAvg": 4.8,
+      "user": { ... }
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total": 50,
+    "totalPages": 5
+  }
+}
+```
+
+---
+
+## 15. Search Performers
+
+Used by the **Provider** client apps to execute a keyword search across taskers.
+
+*   **Method:** `GET`
+*   **Endpoint:** `/taskers/search`
+*   **Authentication:** `Required (Bearer Token)`
+*   **Role Permission:** `PROVIDER`
+*   **Query Parameters:** 
+    * `keyword` (Searches displayName, domain, profession)
+    * `kycStatus`, `minRating`, `isAvailable`, `sortBy`, `page`, `limit` (same as feed)
+
+---
+
+## 16. View Public Profile
+
+Used by Providers (or other taskers) to view the public profile of a specific performer.
+
+*   **Method:** `GET`
+*   **Endpoint:** `/taskers/:id`
+*   **Authentication:** `Required (Bearer Token)`
+*   **Role Permission:** `TASKER`, `PROVIDER`
+
+### Successful Response (200 OK)
+```json
+{
+  "id": "tasker-uuid-123",
+  "displayName": "John Doe",
+  "bio": "Expert plumber...",
+  "reviews": [ ... ],
+  "portfolio": [ ... ],
+  "user": { ... }
+}
+```
